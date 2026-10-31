@@ -124,6 +124,8 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
+  p->priority = 5;
+  initproc = p;
   
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
@@ -198,6 +200,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->priority = curproc->priority;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -536,32 +539,44 @@ procdump(void)
 int
 setnice(int pid, int nice)
 {
+    int result = -1;
+
     if( nice < 0 || nice > 30)
-        return -1;
+        return result;
 
     struct proc *p;
     acquire(&ptable.lock);
 
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
-
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	    if(p->pid == pid){
+		    p->priority = nice;
+		    result = 0;
+        break;
+	    }
+    }
     release(&ptable.lock);
-    return -1;
+    return result;
 }
 
 int
 getnice(int pid)
 {
-    struct proc *p;
-    acquire(&ptable.lock);
-    
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
+  struct proc *p;
 
-    release(&ptable.lock);
-    return -1;
+  acquire(&ptable.lock);
+  
+  int result = -1;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      result = p->priority;
+      break;
+    }
+  }
+
+  release(&ptable.lock);
+
+  return result;
 }
 
 void
@@ -571,9 +586,34 @@ ps(void)
     acquire(&ptable.lock);
     cprintf("name\tpid\tppid\tmem\tprio\tstate\n");
 
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    
+    int ppid;
+    char *state;
+
+    if(p->state == RUNNING)
+        state = "RUNNING";
+    else if(p->state == RUNNABLE)
+        state = "RUNNABLE";
+    else if(p->state == SLEEPING)
+        state = "SLEEPING";
+    else
+        continue;
+
+    
+    if(p->parent == 0)
+        ppid = -1;
+    else
+        ppid = p->parent->pid;
+
+    cprintf("%s\t%d\t%d\t%d\t%d\t%s\n",
+            p->name,
+            p->pid,
+            ppid,
+            p->sz,
+            p->priority,
+            state);
+}
 
     release(&ptable.lock);
     return;
