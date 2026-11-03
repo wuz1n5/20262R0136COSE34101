@@ -121,6 +121,12 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 int             setnice(int,int);
+int             higher_rq(struct proc*, struct proc*);
+void            init_rq(void);
+int             contains_rq(struct proc*);
+void            push_rq(struct proc*);
+struct proc*    pop_rq(void);
+void            remove_rq(struct proc*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

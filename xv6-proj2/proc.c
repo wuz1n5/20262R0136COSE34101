@@ -26,6 +26,120 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
 }
 
+//Ready Queue
+struct node {
+    struct proc *p;
+    struct node *next;
+};
+
+struct ready_queue {
+    struct node nodes[NPROC];
+    struct node *front;
+    int size;
+};
+
+struct ready_queue rq;
+
+void
+init_rq(void){
+	int i = 0;
+
+	rq.front = 0;
+	rq.size = 0;
+
+	while (i < NPROC){
+		rq.nodes[i].p = &ptable.proc[i];
+    		rq.nodes[i].next = 0;
+		i++;
+	}
+}
+
+int 
+higher_rq(struct proc *a, struct proc *b){
+	if(a->priority != b->priority){
+		return a->priority < b->priority;
+	}
+  	return a->pid > b->pid;
+}
+		
+int
+contains_rq(struct proc *p){
+	struct node *cur = rq.front;
+
+	while(cur != 0){
+		if(cur->p == p){
+			return 1;
+		}
+		cur = cur->next;
+	}
+	return 0;
+}
+
+void
+push_rq(struct proc *p){
+	struct node *new, *cur;
+
+	if(contains_rq(p)) return;
+
+	new = &rq.nodes[p - ptable.proc];
+	new->p = p;
+	new->next = 0;
+
+	cur = rq.front;
+	
+	if(cur == 0 || higher_rq(p, cur->p)){
+		new->next = cur;
+		rq.front = new;
+	}
+	else{
+		while(cur->next != 0 && !higher_rq(p, cur->next->p)){
+			cur = cur->next;
+		}
+		new->next = cur->next;
+		cur->next = new;
+	}
+	rq.size++;
+}
+
+struct proc*
+pop_rq(void){
+	struct node *first;
+
+	if(rq.front == 0) return 0;
+
+	first = rq.front;
+  	rq.front = first->next;
+  	first->next = 0;
+  	rq.size--;
+
+  	return first->p;
+}
+
+void
+remove_rq(struct proc *p){
+    	struct node *cur;
+
+    	cur = rq.front;
+
+    	if(cur == 0) return;
+
+    	if(cur->p == p){
+        	rq.front = cur->next;
+        	cur->next = 0;
+        	rq.size--;
+        	return;
+    	}
+
+    	while(cur->next != 0 && cur->next->p != p){
+        	cur = cur->next;
+    	}
+
+    	if(cur->next == 0) return;
+
+    	cur->next = cur->next->next;
+    	rq.size--;
+}
+
 // Must be called with interrupts disabled
 int
 cpuid() {
@@ -196,7 +310,7 @@ fork(void)
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
-    return -1;
+    returnhttps://github.com/ChaeyeonAhn/home-et.git -1;
   }
   np->sz = curproc->sz;
   np->parent = curproc;
@@ -340,26 +454,16 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+    p = pop_rq();
+    if(p){
+	c->proc = p;
+      	switchuvm(p);
+      	p->state = RUNNING;
+      	swtch(&(c->scheduler), p->context);
+      	switchkvm();
+      	c->proc = 0;
     }
     release(&ptable.lock);
-
   }
 }
 
