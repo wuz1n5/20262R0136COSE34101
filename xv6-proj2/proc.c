@@ -139,7 +139,21 @@ remove_rq(struct proc *p){
     	cur->next = cur->next->next;
     	rq.size--;
 }
+//R3
+void
+check_preempt(void)
+{
+  	struct proc *cur = myproc();
+  	int preempt;
 
+  	acquire(&ptable.lock);
+
+  	preempt = cur && rq.front && higher_rq(rq.front->p, cur);
+
+  	release(&ptable.lock);
+
+  	if(preempt) yield();
+}
 // Must be called with interrupts disabled
 int
 cpuid() {
@@ -265,6 +279,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  push_rq(p);
 
   release(&ptable.lock);
 }
@@ -310,7 +325,7 @@ fork(void)
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
-    returnhttps://github.com/ChaeyeonAhn/home-et.git -1;
+    return -1;
   }
   np->sz = curproc->sz;
   np->parent = curproc;
@@ -337,8 +352,10 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  push_rq(np);
 
   release(&ptable.lock);
+  check_preempt(void);
 
   return pid;
 }
@@ -499,6 +516,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  push_rq(myproc());
   sched();
   release(&ptable.lock);
 }
@@ -572,8 +590,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
-      p->state = RUNNABLE;
+    if(p->state == SLEEPING && p->chan == chan){
+	    p->state = RUNNABLE;
+	    push_rq(p);
+    }	
 }
 
 // Wake up all processes sleeping on chan.
@@ -598,8 +618,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+      if(p->state == SLEEPING){
+	      p->state = RUNNABLE;
+	      push_rq(p);
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -662,5 +684,7 @@ setnice(int pid, int nice)
   }
 
   release(&ptable.lock);
+  check_preempt(void);
+
   return -1;
 }

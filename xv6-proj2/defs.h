@@ -127,6 +127,7 @@ int             contains_rq(struct proc*);
 void            push_rq(struct proc*);
 struct proc*    pop_rq(void);
 void            remove_rq(struct proc*);
+void            check_preempt(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
