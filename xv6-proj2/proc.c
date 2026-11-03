@@ -355,7 +355,7 @@ fork(void)
   push_rq(np);
 
   release(&ptable.lock);
-  check_preempt(void);
+  check_preempt();
 
   return pid;
 }
@@ -684,7 +684,7 @@ setnice(int pid, int nice)
   }
 
   release(&ptable.lock);
-  check_preempt(void);
+  check_preempt();
 
   return -1;
 }
