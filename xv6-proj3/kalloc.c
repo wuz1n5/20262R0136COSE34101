@@ -67,15 +67,26 @@ void
 kfree(char *v)
 {
   struct run *r;
+  uint i;
 
   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
     panic("kfree");
 
-  // Fill with junk to catch dangling refs.
-  memset(v, 1, PGSIZE);
+  i = V2P(v) >> PGSHIFT;
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
+
+  if(pmem.refcount[i] > 1){
+    pmem.refcount[i]--;
+    if(kmem.use_lock) release(&kmem.lock);
+    return;
+  }
+
+  pmem.refcount[i] = 0;
+  // Fill with junk to catch dangling refs.
+  memset(v, 1, PGSIZE);
+
   r = (struct run*)v;
   r->next = kmem.freelist;
   kmem.freelist = r;
@@ -97,10 +108,11 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
-
-  pmem.num_free_pages--;
+    pmem.refcount[V2P((char*)r) >> PGSHIFT] = 1;
+    pmem.num_free_pages--;
+  }
 
   if(kmem.use_lock)
     release(&kmem.lock);
