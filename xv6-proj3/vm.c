@@ -390,12 +390,51 @@ void
 page_fault(void)
 {
   uint va = rcr2();
-  if(va < 0) {
-    panic("Invalid access");
+  uint i, n;
+  pte_t *pte;
+  char *mem;
+
+  if(myproc() == 0)
+    panic("page_fault");
+
+  if(va >= KERNBASE){
+    myproc()->killed = 1;
     return;
   }
-  
-  return;
+
+  pte = walkpgdir(myproc()->pgdir, (void*)va, 0);
+
+  if(pte == 0 || !(*pte & PTE_P) ||
+     !(*pte & PTE_U) || (*pte & PTE_W)){
+    myproc()->killed = 1;
+    return;
+  }
+
+  i = PTE_ADDR(*pte);
+  n = get_refcount(i);
+
+  if(n == 0){
+    myproc()->killed = 1;
+    return;
+  }
+
+  if(n > 1){
+    mem = kalloc();
+
+    if(mem == 0){
+      myproc()->killed = 1;
+      return;
+    }
+
+    memmove(mem, (char*)P2V(i), PGSIZE);
+    *pte = V2P(mem) | PTE_FLAGS(*pte) | PTE_W;
+    kfree((char*)P2V(i));
+  }
+  else{
+    *pte |= PTE_W;
+  }
+
+  lcr3(V2P(myproc()->pgdir));
 }
 
 //PAGEBREAK!
