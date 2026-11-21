@@ -116,17 +116,41 @@ freemem(void)
 uint
 get_refcount(uint pa)
 {
-  return 0;
+  uint i;
+  
+  if(pa >= PHYSTOP) return 0;
+  if(kmem.use_lock) acquire(&kmem.lock);
+  i = pmem.refcount[pa >> PGSHIFT];
+  if(kmem.use_lock) release(&kmem.lock);
+
+  return i;
 }
 
 void
 inc_refcount(uint pa)
 {
-  return;
+  if(pa >= PHYSTOP) return;
+  
+  if(kmem.use_lock) acquire(&kmem.lock);
+
+  pmem.refcount[pa >> PGSHIFT]++;
+  
+  if(kmem.use_lock) release(&kmem.lock);
 }
 
 void  
 dec_refcount(uint pa)
 {
-  return;
+  if(pa >= PHYSTOP) return;
+
+  if(kmem.use_lock) acquire(&kmem.lock);
+
+  if(pmem.refcount[pa >> PGSHIFT] == 0){
+    if(kmem.use_lock) release(&kmem.lock);
+    return;
+  }
+
+  pmem.refcount[pa >> PGSHIFT]--;
+
+  if(kmem.use_lock) release(&kmem.lock);
 }
